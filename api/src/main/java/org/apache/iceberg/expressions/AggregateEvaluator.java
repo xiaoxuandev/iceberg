@@ -83,6 +83,18 @@ public class AggregateEvaluator {
     }
   }
 
+  public void update(DataFile file, StructLike struct) {
+    for (Aggregator<?> aggregator : aggregators) {
+      if (aggregator.hasColumnValue(file)) {
+        aggregator.update(file);
+      } else if (aggregator.isPartitionColumn(struct)) {
+        aggregator.update(file, struct);
+      } else {
+        aggregator.setInvalid();
+      }
+    }
+  }
+
   public Types.StructType resultType() {
     return resultType;
   }

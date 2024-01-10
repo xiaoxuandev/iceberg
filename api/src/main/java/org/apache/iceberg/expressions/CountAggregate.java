@@ -47,6 +47,16 @@ public class CountAggregate<T> extends BoundAggregate<T, Long> {
   }
 
   @Override
+  public Long eval(DataFile file, StructLike struct) {
+    return countFor(file, struct);
+  }
+
+  protected Long countFor(DataFile file, StructLike row) {
+    throw new UnsupportedOperationException(
+        this.getClass().getName() + " does not implement countFor(DataFile)");
+  }
+
+  @Override
   public Aggregator<Long> newAggregator() {
     return new CountAggregator<>(this);
   }

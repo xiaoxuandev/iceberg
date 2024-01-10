@@ -250,7 +250,7 @@ public class SparkScanBuilder
           return false;
         }
 
-        aggregateEvaluator.update(task.file());
+        aggregateEvaluator.update(task.file(), task.file().partition());
       }
     } catch (IOException e) {
       LOG.info("Skipping aggregate pushdown: ", e);

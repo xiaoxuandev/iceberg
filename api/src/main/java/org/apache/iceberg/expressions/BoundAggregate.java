@@ -36,6 +36,14 @@ public class BoundAggregate<T, C> extends Aggregate<BoundTerm<T>> implements Bou
         this.getClass().getName() + " does not implement eval(StructLike)");
   }
 
+  public C eval(DataFile file, StructLike struct) {
+    C value = eval(file);
+    if (value == null) {
+      value = eval(struct);
+    }
+    return value;
+  }
+
   C eval(DataFile file) {
     throw new UnsupportedOperationException(
         this.getClass().getName() + " does not implement eval(DataFile)");
@@ -44,6 +52,16 @@ public class BoundAggregate<T, C> extends Aggregate<BoundTerm<T>> implements Bou
   boolean hasValue(DataFile file) {
     throw new UnsupportedOperationException(
         this.getClass().getName() + " does not implement hasValue(DataFile)");
+  }
+
+  boolean hasColumnValue(DataFile file) {
+    throw new UnsupportedOperationException(
+        this.getClass().getName() + " does not implement hasColumnValue(DataFile)");
+  }
+
+  boolean isPartitionColumn(StructLike struct) {
+    throw new UnsupportedOperationException(
+        this.getClass().getName() + " does not implement hasColumnValue(DataFile)");
   }
 
   Aggregator<C> newAggregator() {
@@ -109,6 +127,14 @@ public class BoundAggregate<T, C> extends Aggregate<BoundTerm<T>> implements Bou
     R result();
 
     boolean isValid();
+
+    void update(DataFile file, StructLike struct);
+
+    void setInvalid();
+
+    boolean hasColumnValue(DataFile file);
+
+    boolean isPartitionColumn(StructLike struct);
   }
 
   abstract static class NullSafeAggregator<T, R> implements Aggregator<R> {
@@ -132,8 +158,35 @@ public class BoundAggregate<T, C> extends Aggregate<BoundTerm<T>> implements Bou
     }
 
     @Override
+    public void update(DataFile file, StructLike struct) {
+      if (isValid) {
+        R value = aggregate.eval(file, struct);
+        if (value == null && !isPartitionColumn(struct)) {
+          this.isValid = false;
+        } else {
+          update(value);
+        }
+      }
+    }
+
+    @Override
     public boolean hasValue(DataFile file) {
       return aggregate.hasValue(file);
+    }
+
+    @Override
+    public boolean hasColumnValue(DataFile file) {
+      return aggregate.hasColumnValue(file);
+    }
+
+    @Override
+    public boolean isPartitionColumn(StructLike struct) {
+      return aggregate.isPartitionColumn(struct);
+    }
+
+    @Override
+    public void setInvalid() {
+      this.isValid = false;
     }
 
     @Override

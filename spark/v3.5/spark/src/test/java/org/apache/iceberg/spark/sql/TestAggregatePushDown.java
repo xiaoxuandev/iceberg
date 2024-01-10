@@ -437,6 +437,39 @@ public class TestAggregatePushDown extends SparkCatalogTestBase {
   }
 
   @Test
+  public void testAggregatePushdownOnPartitionColumn() {
+    String createTable =
+        "CREATE TABLE %s (id LONG, data INT) USING iceberg PARTITIONED BY (date INT)";
+    sql(createTable, tableName);
+
+    sql(
+        "INSERT INTO TABLE %s VALUES"
+            + " (1, 11, 2001),"
+            + " (1, 22, 2001),"
+            + " (2, 33, 2002),"
+            + " (2, 44, 2002),"
+            + " (3, 55, 2003),"
+            + " (3, 66, 2004) ",
+        tableName);
+
+    String select = "SELECT MIN(date) FROM %s";
+
+    List<Object[]> explain = sql("EXPLAIN " + select, tableName);
+    String explainString = explain.get(0)[0].toString().toLowerCase(Locale.ROOT);
+    boolean explainContainsPushDownAggregates = false;
+    if (explainString.contains("min(date)")) {
+      explainContainsPushDownAggregates = true;
+    }
+    Assert.assertTrue(
+        "explain should contain the pushed down aggregates", explainContainsPushDownAggregates);
+
+    List<Object[]> actual = sql(select, tableName);
+    List<Object[]> expected = Lists.newArrayList();
+    expected.add(new Object[] {2001});
+    assertEquals("expected and actual should equal", expected, actual);
+  }
+
+  @Test
   public void testAggregateWithComplexType() {
     sql("CREATE TABLE %s (id INT, complex STRUCT<c1:INT,c2:STRING>) USING iceberg", tableName);
     sql(

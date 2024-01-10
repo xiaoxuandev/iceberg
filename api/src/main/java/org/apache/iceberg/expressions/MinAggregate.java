@@ -20,6 +20,7 @@ package org.apache.iceberg.expressions;
 
 import java.util.Comparator;
 import org.apache.iceberg.DataFile;
+import org.apache.iceberg.StructLike;
 import org.apache.iceberg.types.Comparators;
 import org.apache.iceberg.types.Conversions;
 import org.apache.iceberg.types.Type.PrimitiveType;
@@ -27,6 +28,7 @@ import org.apache.iceberg.types.Types;
 
 public class MinAggregate<T> extends ValueAggregate<T> {
   private final int fieldId;
+  private final String fieldName;
   private final PrimitiveType type;
   private final Comparator<T> comparator;
 
@@ -34,6 +36,7 @@ public class MinAggregate<T> extends ValueAggregate<T> {
     super(Operation.MIN, term);
     Types.NestedField field = term.ref().field();
     this.fieldId = field.fieldId();
+    this.fieldName = field.name();
     this.type = field.type().asPrimitiveType();
     this.comparator = Comparators.forType(type);
   }
@@ -49,6 +52,16 @@ public class MinAggregate<T> extends ValueAggregate<T> {
             && nullCount != null
             && nullCount.longValue() == valueCount.longValue();
     return hasBound || boundAllNull;
+  }
+
+  @Override
+  protected boolean hasColumnValue(DataFile file) {
+    return file.valueCounts().containsKey(fieldId) && file.nullValueCounts().containsKey(fieldId);
+  }
+
+  @Override
+  protected boolean isPartitionColumn(StructLike struct) {
+    return struct.getPartitionColumnNames().contains(String.valueOf(fieldName));
   }
 
   @Override
@@ -72,6 +85,10 @@ public class MinAggregate<T> extends ValueAggregate<T> {
 
     @Override
     protected void update(T value) {
+      if (value == null) {
+        return;
+      }
+
       if (min == null || comparator.compare(value, min) < 0) {
         this.min = value;
       }

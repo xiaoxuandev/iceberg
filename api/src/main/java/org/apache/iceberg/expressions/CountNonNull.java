@@ -24,12 +24,14 @@ import org.apache.iceberg.types.Types;
 
 public class CountNonNull<T> extends CountAggregate<T> {
   private final int fieldId;
+  private final String fieldName;
   private final Types.NestedField field;
 
   protected CountNonNull(BoundTerm<T> term) {
     super(Operation.COUNT, term);
     this.field = term.ref().field();
     this.fieldId = field.fieldId();
+    this.fieldName = field.name();
   }
 
   @Override
@@ -40,6 +42,27 @@ public class CountNonNull<T> extends CountAggregate<T> {
   @Override
   protected boolean hasValue(DataFile file) {
     return file.valueCounts().containsKey(fieldId) && file.nullValueCounts().containsKey(fieldId);
+  }
+
+  @Override
+  protected boolean hasColumnValue(DataFile file) {
+    return file.valueCounts().containsKey(fieldId) && file.nullValueCounts().containsKey(fieldId);
+  }
+
+  @Override
+  protected boolean isPartitionColumn(StructLike struct) {
+    return struct.getPartitionColumnNames().contains(String.valueOf(fieldName));
+  }
+
+  @Override
+  protected Long countFor(DataFile file, StructLike row) {
+    Long value =
+        safeSubtract(
+            safeGet(file.valueCounts(), fieldId), safeGet(file.nullValueCounts(), fieldId, 0L));
+    if (value == null) {
+      value = term().eval(row) != null ? file.recordCount() : 0L;
+    }
+    return value;
   }
 
   @Override
