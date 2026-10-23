@@ -26,13 +26,13 @@ import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.jdbc.JdbcCatalog;
+import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.util.PropertyUtil;
 import org.eclipse.jetty.compression.gzip.GzipCompression;
 import org.eclipse.jetty.compression.server.CompressionHandler;
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee10.servlet.ServletHolder;
-import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.slf4j.Logger;
@@ -120,18 +120,31 @@ public class RESTCatalogServer {
     compressionHandler.putCompression(new GzipCompression());
     context.insertHandler(compressionHandler);
 
+    // a configured port of 0 asks the OS for an ephemeral port; read it back with port()
     this.httpServer =
         new Server(
             PropertyUtil.propertyAsInt(catalogContext.configuration, REST_PORT, REST_PORT_DEFAULT));
     httpServer.setHandler(context);
-    for (Connector connector : httpServer.getConnectors()) {
-      ((ServerConnector) connector).setReusePort(true);
-    }
     httpServer.start();
+
+    LOG.info("Started REST catalog server on port {}", port());
 
     if (join) {
       httpServer.join();
     }
+  }
+
+  /**
+   * Returns the port the server is actually listening on.
+   *
+   * <p>When the server was configured with port 0, this is the ephemeral port assigned by the OS.
+   *
+   * @throws IllegalStateException if the server has not been started
+   */
+  public int port() {
+    Preconditions.checkState(
+        httpServer != null && httpServer.isStarted(), "REST catalog server is not started");
+    return ((ServerConnector) httpServer.getConnectors()[0]).getLocalPort();
   }
 
   public void stop() throws Exception {

@@ -18,8 +18,6 @@
  */
 package org.apache.iceberg.rest;
 
-import java.io.UncheckedIOException;
-import java.net.BindException;
 import java.util.Map;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.junit.jupiter.api.extension.AfterAllCallback;
@@ -34,21 +32,22 @@ public class RESTServerExtension implements BeforeAllCallback, AfterAllCallback 
   private RESTCatalogServer localServer;
   private RESTCatalog client;
   private final Map<String, String> config;
-  private final boolean findFreePort;
 
   public RESTServerExtension() {
     config = Maps.newHashMap();
-    findFreePort = false;
   }
 
   public RESTServerExtension(Map<String, String> config) {
-    Map<String, String> conf = Maps.newHashMap(config);
-    findFreePort =
-        conf.containsKey(RESTCatalogServer.REST_PORT)
-            && conf.get(RESTCatalogServer.REST_PORT).equals(FREE_PORT);
-    this.config = conf;
+    this.config = Maps.newHashMap(config);
   }
 
+  /**
+   * Returns the configuration the server and client were started with.
+   *
+   * <p>If the server was requested on a free port ({@link #FREE_PORT}), {@link
+   * RESTCatalogServer#REST_PORT} is replaced with the port that was actually bound once the server
+   * has started.
+   */
   public Map<String, String> config() {
     return config;
   }
@@ -61,23 +60,17 @@ public class RESTServerExtension implements BeforeAllCallback, AfterAllCallback 
   public void beforeAll(ExtensionContext extensionContext) throws Exception {
     if (Boolean.parseBoolean(
         extensionContext.getConfigurationParameter(RCKUtils.RCK_LOCAL).orElse("true"))) {
-      int maxAttempts = 10;
-      for (int i = 0; i < maxAttempts; i++) {
-        try {
-          if (findFreePort) {
-            config.put(RESTCatalogServer.REST_PORT, String.valueOf(RCKUtils.findFreePort()));
-          }
-          this.localServer = new RESTCatalogServer(config);
-          this.localServer.start(false);
-          break;
-        } catch (BindException e) {
-          if (!findFreePort || i == maxAttempts - 1) {
-            throw new UncheckedIOException("Failed to start REST server", e);
-          }
-        } catch (Exception e) {
-          throw new RuntimeException("Failed to start REST server", e);
-        }
+      try {
+        this.localServer = new RESTCatalogServer(config);
+        this.localServer.start(false);
+      } catch (Exception e) {
+        throw new RuntimeException("Failed to start REST server", e);
       }
+
+      // Let the OS pick the port and read it back after binding. Probing for a free port before
+      // binding is racy: another test JVM can bind the same port in between, and SO_REUSEPORT would
+      // then silently let both servers share it.
+      config.put(RESTCatalogServer.REST_PORT, String.valueOf(localServer.port()));
 
       this.client = RCKUtils.initCatalogClient(config);
     }
